@@ -38,7 +38,9 @@ int main()
   vector<VectorXd> estimations;
   vector<VectorXd> ground_truth;
 
-  h.onMessage([&fusionEKF,&tools,&estimations,&ground_truth](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
+  vector<VectorXd> rmses;
+
+  h.onMessage([&fusionEKF,&tools,&estimations,&ground_truth,&rmses](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -67,30 +69,30 @@ int main()
     	  iss >> sensor_type;
 
     	  if (sensor_type.compare("L") == 0) {
-      	  		meas_package.sensor_type_ = MeasurementPackage::LASER;
-          		meas_package.raw_measurements_ = VectorXd(2);
-          		float px;
-      	  		float py;
-          		iss >> px;
-          		iss >> py;
-          		meas_package.raw_measurements_ << px, py;
-          		iss >> timestamp;
-          		meas_package.timestamp_ = timestamp;
-          } else if (sensor_type.compare("R") == 0) {
+          meas_package.sensor_type_ = MeasurementPackage::LASER;
+          meas_package.raw_measurements_ = VectorXd(2);
+          float px;
+          float py;
+          iss >> px;
+          iss >> py;
+          meas_package.raw_measurements_ << px, py;
+          iss >> timestamp;
+          meas_package.timestamp_ = timestamp;
+        } else if (sensor_type.compare("R") == 0) {
 
-      	  		meas_package.sensor_type_ = MeasurementPackage::RADAR;
-          		meas_package.raw_measurements_ = VectorXd(3);
-          		float ro;
-      	  		float theta;
-      	  		float ro_dot;
-          		iss >> ro;
-          		iss >> theta;
-          		iss >> ro_dot;
-          		meas_package.raw_measurements_ << ro,theta, ro_dot;
-          		iss >> timestamp;
-          		meas_package.timestamp_ = timestamp;
-          }
-          float x_gt;
+          meas_package.sensor_type_ = MeasurementPackage::RADAR;
+          meas_package.raw_measurements_ = VectorXd(3);
+          float ro;
+          float theta;
+          float ro_dot;
+          iss >> ro;
+          iss >> theta;
+          iss >> ro_dot;
+          meas_package.raw_measurements_ << ro,theta, ro_dot;
+          iss >> timestamp;
+          meas_package.timestamp_ = timestamp;
+        }
+        float x_gt;
     	  float y_gt;
     	  float vx_gt;
     	  float vy_gt;
@@ -104,8 +106,8 @@ int main()
     	  gt_values(2) = vx_gt;
     	  gt_values(3) = vy_gt;
     	  ground_truth.push_back(gt_values);
-          
-          //Call ProcessMeasurment(meas_package) for Kalman filter
+      
+        //Call ProcessMeasurment(meas_package) for Kalman filter
     	  fusionEKF.ProcessMeasurement(meas_package);    	  
 
     	  //Push the current estimated x,y positon from the Kalman filter's state vector
@@ -136,6 +138,8 @@ int main()
           auto msg = "42[\"estimate_marker\"," + msgJson.dump() + "]";
           // std::cout << msg << std::endl;
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+
+          rmses.push_back(RMSE);
 	  
         }
       } else {
@@ -162,8 +166,19 @@ int main()
     }
   });
 
-  h.onConnection([&h](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
+  h.onConnection([&h,&rmses](uWS::WebSocket<uWS::SERVER> ws, uWS::HttpRequest req) {
     std::cout << "Connected!!!" << std::endl;
+
+    ofstream myfile;
+    myfile.open("../data/radar_rmse.p");
+
+    for (int i = 0; i < rmses.size(); i++)
+    {
+      myfile << rmses[i](0) << "\t" << rmses[i](1) << "\t" << rmses[i](2) << "\t" << rmses[i](3) << "\n";
+    }
+
+    rmses.clear();
+    myfile.close();
   });
 
   h.onDisconnection([&h](uWS::WebSocket<uWS::SERVER> ws, int code, char *message, size_t length) {

@@ -3,6 +3,7 @@
 
 # build files
 build/
+build1/
 
 # editor config
 .vscode/
